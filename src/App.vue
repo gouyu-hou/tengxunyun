@@ -218,23 +218,30 @@ const handleFileChange = file => {
   ElMessage.success(`已载入文件: ${file.name}，点击发送按钮开始审查`)
 }
 
-const fetchStorageCredential = async () => {
+const fetchStorageCredential = async file => {
   try {
-    // 【修改点 3】：使用配置文件中的 CREDENTIAL_API
-    // 注意：这里需要确保您的 vite.config.js 中代理了 /lke-api-common 并且对应后端的真实 STS 接口
+    const ext = (file?.name?.split(".").pop() || "pdf").toLowerCase()
     const { data } = await axios.post(CREDENTIALS.CREDENTIAL_API, {
-      AppKey: CREDENTIALS.APP_KEY
+      fileType: ext,
+      isPublic: false,
+      typeKey: "realtime"
     })
+
+    if (!data?.Response?.TmpSecretId) {
+      throw new Error(data?.message || "凭证服务未返回有效临时密钥")
+    }
+
     return data.Response
   } catch (error) {
     console.error("获取 COS 临时凭证失败:", error)
-    throw new Error("无法获取上传凭证，请检查代理配置和密钥接口")
+    const serverMsg = error?.response?.data?.message
+    throw new Error(serverMsg || "无法获取上传凭证，请检查后端密钥服务配置")
   }
 }
 
 const uploadAndParseDocument = async file => {
   try {
-    const stsData = await fetchStorageCredential()
+    const stsData = await fetchStorageCredential(file)
     const cos = new COS({
       getAuthorization: (options, callback) => {
         callback({
